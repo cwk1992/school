@@ -1,0 +1,14 @@
+This is a set of programs and created data for COMP433 (Information Retrieval).
+The programs are written by Robert Luk and they should only be used for COMP433.
+
+compile		The script that compiles the program (using g++ compiler)
+stem		The Porter stemming algorithm
+IInvFile	The integrated inverted index class (declaration/definition)
+BuildInvFile	Converts the data in post.txt into the inverted file format
+		using the integrated inverted index class
+DocLen		Computes the document length of each document (should be used
+		after BuildInvFile is run or the InvFile.txt is created)
+Retrieval	Perform interactive retrieval (should be used after BuildInvFile
+		and DocLen are run, or the InvFile.txt and InvFile.doc are
+		created)
+

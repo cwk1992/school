@@ -1,0 +1,137 @@
+Program to evaluate TREC results using SMART evaluation procedures.
+        trec_eval [-q] [-a] [-d] trec_rel_file trec_top_file
+
+
+INSTALLATION:
+Compilation should be reasonably system independent.  In most cases, 
+typing "make" in the unpacked directory should work.  If the binary
+should be installed elsewhere, change "Makefile" accordingly.
+
+
+PROGRAM DESCRIPTION
+Take TREC top results file, TREC relevant docs file, and evaluate
+        trec_eval [-q] [-a] trec_rel_file trec_top_file
+
+Read text tuples from trec_top_file of the form
+    030  Q0  ZF08-175-870  0   4238   prise1
+    qid iter   docno      rank  sim   run_id
+giving TREC document numbers (a string) retrieved by query qid 
+(an integer) with similarity sim (a float).  The other fields are ignored.
+Input is asssumed to be sorted numerically by qid.
+Sim is assumed to be higher for the docs to be retrieved first.
+Relevance for each docno to qid is determined from text_qrels_file, which
+consists of text tuples of the form
+   qid  iter  docno  rel
+giving TREC document numbers (a string) and their relevance to query qid
+(an integer). Tuples are asssumed to be sorted numerically by qid.
+The text tuples with relevence judgements are converted to TR_VEC form
+and then submitted to the SMART evaluation routines.
+
+Procedure is to read all the docs retrieved for a query, and all the
+relevant docs for that query,
+sort and rank the retrieved docs by sim/docno, 
+and look up docno in the relevant docs to determine relevance.
+The qid,did,rank,sim,rel fields of TR_VEC are filled in; 
+action,iter fields are set to 0.
+Queries for which there are no relevant docs are ignored.
+Warning: queries for which there are relevant docs but no retrieved docs
+are also ignored.  This allows systems to evaluate over subsets of the
+relevant docs, but means if a system improperly retrieves no docs, it will
+not be detected.
+
+-q: In addition to summary evaluation, give evaluation for each query
+-a: Print all evaluation measures calculated, instead of just the
+     official measures for TREC 2.  This includes measures used
+     for TREC 1 but dropped for TREC 2, variants involving
+     interpolation, measures under consideration for future TRECs.
+     Comments on these measures would be appreciated, but none
+     of the non-official values should be reported anywhere.
+     Use internally at your own risk (I THINK they're correct!)
+-d: Print the avg_doc_prec measure in addition to the official measures
+    (Note that this value should be ignored in single query evaluation)
+
+EXPLANATION OF OFFICIAL VALUES PRINTED
+1. Total number of documents over all queries
+        Retrieved:
+        Relevant:
+        Rel_ret:     (relevant and retrieved)
+   These should be self-explanatory.  All values are totals over all
+   queries being evaluated.
+2. Interpolated Recall - Precision Averages:
+        at 0.00
+        at 0.10
+        ...
+        at 1.00
+   See any standard IR text (especially by Salton) for more details of 
+   recall-precision evaluation.  Measures precision (percent of retrieved
+   docs that are relevant) at various recall levels (after a certain
+   percentage of all the relevant docs for that query have been retrieved).
+   "Interpolated" means that, for example, precision at recall
+   0.10 (ie, after 10% of rel docs for a query have been retrieved) is
+   taken to be MAXIMUM of precision at all recall points >= 0.10.
+   Values are averaged over all queries (for each of the 11 recall levels).
+   These values are used for Recall-Precision graphs.
+3. Average precision (non-interpolated) over all rel docs
+   The precision is calculated after each relevant doc is retrieved.
+   If a relevant doc is not retrieved, the precision is 0.0.
+   All precision values are then averaged together to get a single number
+   for the performance of a query.  Conceptually this is the area
+   underneath the recall-precision graph for the query.
+   The values are then averaged over all queries.
+4. Precision:
+       at 5    docs
+       at 10   docs
+       ...
+       at 1000 docs   
+   The precision (percent of retrieved docs that are relevant) after X
+   documents (whether relevant or nonrelevant) have been retrieved.
+   Values averaged over all queries.  If X docs were not retrieved
+   for a query, then all missing docs are assumed to be non-relevant.
+5. R-Precision (precision after R (= num_rel for a query) docs retrieved):
+   New measure, intended mainly to be used for routing environments.
+   Measures precision (or recall, they're the same) after R docs
+   have been retrieved, where R is the total number of relevant docs
+   for a query.  Thus if a query has 40 relevant docs, then precision
+   is measured after 40 docs, while if it has 600 relevant docs, precision
+   is measured after 600 docs.  This avoids some of the averaging
+   problems of the "precision at X docs" values in (4) above.
+   If R is greater than the number of docs retrieved for a query, then
+   the nonretrieved docs are all assumed to be nonrelevant.
+
+
+
+CODE DESCRIPTION
+trec_eval.c     : main procedure.  Takes input files, constructs a SMART
+                format result structure for a query (including relevance 
+                judgements) and call tr_eval to accumulate this query's
+                evaluation results into a collection evaluation structure.
+tr_eval.c       : Takes results of a single query and calls trvec_smeval
+                to evaluate query.  Then accumulates the results.
+trvec_smeval.c  : Evaluates a single query.
+print_eval.c    : Takes a collection evalutation structure and prints it.
+
+utility procedures:
+error_msgs.c    : set/print error message
+textline.c      : break an input string into tokens.
+
+Note that most of the code except for trec_eval.c itself is from the
+SMART system.  It's been adapted so that it's now stand-alone code,
+but the structure of the SMART code has been changed as little as
+possible.  A side-effect of this is that the code is more complicated
+than it needs to be (eg, the extra level of procedures in tr_eval.c).
+
+Trec_eval.c should be broken up into modules, but I've spent enough
+time on this for now; if somebody wants to pretty the code up, I'll
+be glad to serve as a central distribution point.
+
+Note that all of the functionality of trec_eval is contained within
+SMART version 11 (including conversions to/from DOCNO format).  Those
+people using SMART for TREC shouldn't need this program (except perhaps
+as a check that evaluation is set up correctly)
+
+
+VERSION 3 changes (from Version 2):
+1. Totally disregards queries with no relevant judged documents.
+(Previously only disregarded queries with no judged documents)
+2. Added new optional measure - Average doc precision, obtainable
+via "-d" flag on command line.
