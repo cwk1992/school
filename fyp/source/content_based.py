@@ -7,7 +7,7 @@ import os
 import time
 
 
-def download_image(signature, bbox):
+def download_image(signature):
 
     path = 'images/' + signature + '.jpg'
     exist = os.path.isfile(path) and os.stat(path).st_size > 0
@@ -28,10 +28,7 @@ def download_image(signature, bbox):
                     break
 
                 handle.write(block)
-
-        time.sleep(1)
-        # crop image according to bounding box
-        crop_image(signature, bbox)
+    time.sleep(0.5)
 
 
 def crop_image(signature, bbox):
@@ -62,23 +59,22 @@ def load_fashion(cat):
     products = []
 
     with open('clothing_dataset/fashion.json', 'r') as f:
+        i = 1
         line = f.readline()
-        while (line):
+        while (line and i <= 17488):
             data = json.loads(line)
-
             # get product, scene, bounding box from fashion data
             product, scene, bbox = data['product'], data['scene'], data['bbox']
-
-            # download image
-            download_image(scene, bbox)
 
             category = cat[product]
 
             products.append(
-                {'product': product, 'scene': scene, 'category': category})
+                {'product': product, 'scene': scene, 'category': category, 'bbox': bbox})
 
             # read next line
             line = f.readline()
+            print(i)
+            i += 1
     return products
 
 
@@ -93,11 +89,20 @@ def load_fashion_data():
     conn = create_connection("database/fashion.db")
 
     for product in products:
-        product, scene, category = product['product'], product['scene'], product['category']
+        product, scene, category, bbox = product['product'], product['scene'], product['category'], product['bbox']
         product_id = create_product(conn, (product, scene, category))
+
+        # download image
+        # download_image(scene)
 
     conn.commit()
     conn.close()
+
+    for product in products:
+        scene, bbox = product['scene'], product['bbox']
+
+        # crop image according to bounding box
+        crop_image(scene, bbox)
 
 
 def create_connection(db_file):
