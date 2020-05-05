@@ -5,6 +5,7 @@ import sqlite3
 from sqlite3 import Error
 import os
 import time
+import itertools
 
 
 def download_image(signature):
@@ -28,7 +29,7 @@ def download_image(signature):
                     break
 
                 handle.write(block)
-    time.sleep(0.5)
+        time.sleep(2)
 
 
 def crop_image(signature, bbox):
@@ -44,7 +45,6 @@ def crop_image(signature, bbox):
         bottom = height * bbox[3]
 
         im = im.crop((left, top, right, bottom))
-        print(path)
         im.save(path)
 
 
@@ -58,24 +58,33 @@ def load_fashion_cat():
 def load_fashion(cat):
     products = []
 
+    ref = {'Apparel & Accessories|Clothing|Shirts & Tops': 'T-shirt/top',
+           'Apparel & Accessories|Clothing|Pants': 'Trouser',
+           'Apparel & Accessories|Handbags, Wallets & Cases': 'Bag',
+           'Apparel & Accessories|Clothing|Skirts': 'Dress',
+           'Apparel & Accessories|Shoes': 'Sneaker',
+           'Apparel & Accessories|Clothing|Shorts': 'Trouser',
+           'Apparel & Accessories|Clothing|Outerwear|Coats & Jackets': 'Coat'}
+
     with open('clothing_dataset/fashion.json', 'r') as f:
-        i = 1
         line = f.readline()
-        while (line and i <= 17488):
+        while (line):
             data = json.loads(line)
             # get product, scene, bounding box from fashion data
             product, scene, bbox = data['product'], data['scene'], data['bbox']
 
             category = cat[product]
 
-            products.append(
-                {'product': product, 'scene': scene, 'category': category, 'bbox': bbox})
+            if (category in ref):
+                products.append(
+                    {'product': product, 'scene': scene, 'category': ref[category], 'bbox': bbox})
 
             # read next line
             line = f.readline()
-            print(i)
-            i += 1
     return products
+
+
+def key_f(x): return x['category']
 
 
 def load_fashion_data():
@@ -88,21 +97,41 @@ def load_fashion_data():
 
     conn = create_connection("database/fashion.db")
 
-    for product in products:
-        product, scene, category, bbox = product['product'], product['scene'], product['category'], product['bbox']
-        product_id = create_product(conn, (product, scene, category))
+    res = {'T-shirt/top': [],
+           'Trouser': [],
+           'Bag': [],
+           'Dress': [],
+           'Sneaker': [],
+           'Trouser': [],
+           'Coat': []}
 
-        # download image
-        # download_image(scene)
+    for product in products:
+        res[product['category']].append(product)
+
+    for cate in res:
+        for product in res[cate]:
+            product, scene, category, bbox = product['product'], product[
+                'scene'], product['category'], product['bbox']
+            product_id = create_product(conn, (product, scene, category))
 
     conn.commit()
     conn.close()
 
-    for product in products:
-        scene, bbox = product['scene'], product['bbox']
+    for cate in res:
+        res[cate] = list(filter(lambda x: (abs(x['bbox'][0] - x['bbox'][2]) > 0.3)
+                                and (abs(x['bbox'][1] - x['bbox'][3]) > 0.3), res[cate]))[:100]
 
-        # crop image according to bounding box
-        crop_image(scene, bbox)
+    i = 0
+    for cate in res:
+        for product in res[cate]:
+            scene, bbox = product['scene'], product['bbox']
+            # download image
+            download_image(scene)
+
+            # crop image according to bounding box
+            crop_image(scene, bbox)
+            i += 1
+            print(i)
 
 
 def create_connection(db_file):
@@ -126,7 +155,3 @@ def create_product(conn, product):
 
 
 load_fashion_data()
-
-# download_image('cdab9160072dd1800038227960ff6467')
-# crop_image('cdab9160072dd1800038227960ff6467',
-#            [0.434097, 0.859363, 0.560254, 1.0])
