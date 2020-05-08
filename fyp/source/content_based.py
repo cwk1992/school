@@ -6,11 +6,12 @@ from sqlite3 import Error
 import os
 import time
 import itertools
+import random
 
 
-def download_image(signature):
+def download_image(signature, id):
 
-    path = 'images/' + signature + '.jpg'
+    path = 'images/' + str(id) + '.jpg'
     exist = os.path.isfile(path) and os.stat(path).st_size > 0
     if(not exist):
 
@@ -29,11 +30,11 @@ def download_image(signature):
                     break
 
                 handle.write(block)
-        time.sleep(2)
+        time.sleep(0.5)
 
 
-def crop_image(signature, bbox):
-    path = 'images/' + signature + '.jpg'
+def crop_image(id, bbox):
+    path = 'images/' + str(id) + '.jpg'
 
     if os.path.isfile(path) and os.stat(path).st_size > 0:
         im = Image.open(path)
@@ -55,14 +56,14 @@ def load_fashion_cat():
     return cat
 
 
-def load_fashion(cat):
+def load_fashion(cat, threshold=0.4):
     products = []
 
-    ref = {'Apparel & Accessories|Clothing|Shirts & Tops': 'T-shirt/top',
+    ref = {'Apparel & Accessories|Clothing|Shirts & Tops': 'T-shirt/top|Pullover|Shirt',
            'Apparel & Accessories|Clothing|Pants': 'Trouser',
            'Apparel & Accessories|Handbags, Wallets & Cases': 'Bag',
            'Apparel & Accessories|Clothing|Skirts': 'Dress',
-           'Apparel & Accessories|Shoes': 'Sneaker',
+           'Apparel & Accessories|Shoes': 'Sandal|Sneaker|Ankle boot',
            'Apparel & Accessories|Clothing|Shorts': 'Trouser',
            'Apparel & Accessories|Clothing|Outerwear|Coats & Jackets': 'Coat'}
 
@@ -75,13 +76,21 @@ def load_fashion(cat):
 
             category = cat[product]
 
-            if (category in ref):
+            if (category in ref and abs(bbox[0] - bbox[2]) > threshold and (abs(bbox[1] - bbox[3]) > threshold)):
                 products.append(
                     {'product': product, 'scene': scene, 'category': ref[category], 'bbox': bbox})
 
             # read next line
             line = f.readline()
+
+    random.shuffle(products)
     return products
+
+
+def delete_image(dir='images'):
+    filelist = [f for f in os.listdir(dir) if f.endswith(".jpg")]
+    for f in filelist:
+        os.remove(os.path.join(dir, f))
 
 
 def key_f(x): return x['category']
@@ -89,49 +98,60 @@ def key_f(x): return x['category']
 
 def load_fashion_data():
 
-    # load category data
-    cat = load_fashion_cat()
-
-    # load fashion data
-    products = load_fashion(cat)
-
     conn = create_connection("database/fashion.db")
 
-    res = {'T-shirt/top': [],
+    # load category data
+    # cat = load_fashion_cat()
+
+    # load fashion data
+    # products = load_fashion(cat)
+    products = select_product(conn)
+
+    # # reset product table
+    # reset_product(conn)
+
+    res = {'T-shirt/top|Pullover|Shirt': [],
            'Trouser': [],
            'Bag': [],
            'Dress': [],
-           'Sneaker': [],
+           'Sandal|Sneaker|Ankle boot': [],
            'Trouser': [],
            'Coat': []}
 
     for product in products:
-        res[product['category']].append(product)
+        # res[product['category']].append(product)
+        res[product[3]].append(product)
 
-    for cate in res:
-        for product in res[cate]:
-            product, scene, category, bbox = product['product'], product[
-                'scene'], product['category'], product['bbox']
-            product_id = create_product(conn, (product, scene, category))
+    # # save product record
+    # for cate in res:
+    #     for item in res[cate]:
+    #         product, scene, category, bbox = item['product'], item[
+    #             'scene'], item['category'], item['bbox']
+    #         product_id = create_product(
+    #             conn, (product, scene, category, bbox[0], bbox[1], bbox[2], bbox[3]))
+    #         item['id'] = product_id
 
-    conn.commit()
-    conn.close()
-
-    for cate in res:
-        res[cate] = list(filter(lambda x: (abs(x['bbox'][0] - x['bbox'][2]) > 0.3)
-                                and (abs(x['bbox'][1] - x['bbox'][3]) > 0.3), res[cate]))[:100]
+    # conn.commit()
+    # conn.close()
 
     i = 0
+    delete_image()
     for cate in res:
         for product in res[cate]:
-            scene, bbox = product['scene'], product['bbox']
+            # scene, bbox = product['scene'], product['bbox']
+            scene = product[2]
             # download image
-            download_image(scene)
-
-            # crop image according to bounding box
-            crop_image(scene, bbox)
+            # download_image(scene, product['id'])
+            download_image(scene, product[0])
             i += 1
             print(i)
+
+    # for cate in res:
+    #     for product in res[cate]:
+    #         # crop image according to bounding box
+    #         crop_image(product['id'], bbox)
+    #         i += 1
+    #         print(i)
 
 
 def create_connection(db_file):
@@ -147,11 +167,29 @@ def create_connection(db_file):
 
 def create_product(conn, product):
     # insert product record
-    sql = ''' INSERT INTO products(product_id,scene,category)
-              VALUES(?,?,?) '''
+    sql = ''' INSERT INTO products(product_id,scene,category,left,top,right,bottom)
+              VALUES(?,?,?,?,?,?,?) '''
     cur = conn.cursor()
     cur.execute(sql, product)
     return cur.lastrowid
+
+
+def select_product(conn):
+    sql = "select * from products;"
+
+    cur = conn.cursor()
+    cur.execute(sql)
+    rows = cur.fetchall()
+    return rows
+
+
+def reset_product(conn):
+    # select product record by scene
+    sql = "DELETE FROM products;"
+    conn.execute(sql)
+
+    sql = "update sqlite_sequence set seq = 0;"
+    conn.execute(sql)
 
 
 load_fashion_data()

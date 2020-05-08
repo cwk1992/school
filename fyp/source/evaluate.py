@@ -35,10 +35,10 @@ def cnn():
                'Coat', 'Sandal', 'Shirt', 'Sneaker', 'Bag', 'Ankle boot']
 
     images = [f for f in listdir('images') if isfile(join('images', f))]
-    scenes = list(map(lambda x: x[:-4], images))
+    ids = list(map(lambda x: x[:-4], images))
 
     conn = create_connection('database/fashion.db')
-    products = select_product(conn, scenes)
+    products = select_product(conn, ids)
 
     # load model
     model = load_model('ResNet56v2.h5')
@@ -50,32 +50,29 @@ def cnn():
     for product in products:
         # load the image if exist
         total += 1
-        path = 'images/' + product[2] + '.jpg'
+        path = 'images/' + str(product[0]) + '.jpg'
         if os.path.isfile(path) and os.stat(path).st_size > 0:
             img = load_image(path)
             # predict the class
             result = model.predict(img)
             result = np.argmax(result, axis=1)
             for key in result:
-                res.append({'actual': product[3], 'predict': classes[key],
+                res.append({'id': product[0], 'actual': product[3], 'predict': classes[key],
                             'result': check_class(product[3], classes[key])})
-                if check_class(product[3], classes[key]):
-                    success += 1
+                success += check_class(product[3], classes[key])
 
     print(res, total, success)
 
 
 def check_class(actual, predict):
-
-    classes = ['T-shirt/top', 'Trouser', 'Pullover', 'Dress',
-               'Coat', 'Sandal', 'Shirt', 'Sneaker', 'Bag', 'Ankle boot']
-
-    if actual == 'T-shirt/top' or actual == 'Shirt' or actual == 'Coat':
-        return predict == actual or predict == 'Shirt' or predict == 'T-shirt/top' or predict == 'Coat'
+    if actual == 'T-shirt/top':
+        return int(predict == 'T-shirt/top' or predict == 'Pullover' or predict == 'Shirt')
     elif actual == 'Sneaker':
-        return predict == actual or predict == 'Ankle boot' or predict == 'Sandal'
+        return int(predict == 'Sneaker' or predict == 'Sandal' or predict == 'Ankle boot')
+    elif actual == 'Coat' and (predict == 'T-shirt/top' or predict == 'Pullover' or predict == 'Shirt'):
+        return 1
     else:
-        return predict == actual
+        return int(predict == actual)
 
 
 def evaluate():
@@ -93,19 +90,20 @@ def create_connection(db_file):
     return conn
 
 
-def select_product(conn, scenes):
+def select_product(conn, ids):
     # select product record by scene
-    sql = "select * from products where scene in ({seq})".format(
-        seq=','.join(['?']*len(scenes)))
+    sql = "select * from products where id in ({seq})".format(
+        seq=','.join(['?']*len(ids)))
 
     cur = conn.cursor()
-    cur.execute(sql, scenes)
+    cur.execute(sql, ids)
     rows = cur.fetchall()
     return rows
 
 # 2859 830
 # 2859 604.5
 # 548 215
+# 2862 716.0
 
 
 # entry point, run the example
