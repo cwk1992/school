@@ -98,7 +98,7 @@ def key_f(x): return x['category']
 
 def load_fashion_data():
 
-    conn = create_connection("database/fashion.db")
+    conn = create_connection("../database/fashion.db")
 
     # load category data
     # cat = load_fashion_cat()
@@ -107,20 +107,25 @@ def load_fashion_data():
     # products = load_fashion(cat)
     products = select_product(conn)
 
+    for product in products:
+        colors = list(product[8:])
+        colors.sort()
+        update_product(conn, product[0], colors)
+
     # # reset product table
     # reset_product(conn)
 
-    res = {'T-shirt/top|Pullover|Shirt': [],
-           'Trouser': [],
-           'Bag': [],
-           'Dress': [],
-           'Sandal|Sneaker|Ankle boot': [],
-           'Trouser': [],
-           'Coat': []}
+    # res = {'T-shirt/top|Pullover|Shirt': [],
+    #        'Trouser': [],
+    #        'Bag': [],
+    #        'Dress': [],
+    #        'Sandal|Sneaker|Ankle boot': [],
+    #        'Trouser': [],
+    #        'Coat': []}
 
-    for product in products:
-        # res[product['category']].append(product)
-        res[product[3]].append(product)
+    # for product in products:
+    #     # res[product['category']].append(product)
+    #     res[product[3]].append(product)
 
     # # save product record
     # for cate in res:
@@ -131,8 +136,8 @@ def load_fashion_data():
     #             conn, (product, scene, category, bbox[0], bbox[1], bbox[2], bbox[3]))
     #         item['id'] = product_id
 
-    # conn.commit()
-    # conn.close()
+    conn.commit()
+    conn.close()
 
     i = 0
     # delete_image()
@@ -182,6 +187,13 @@ def select_product(conn):
     cur.execute(sql)
     rows = cur.fetchall()
     return rows
+
+
+def update_product(conn, id, colors):
+    sql = "update products set color1 = '"+str(colors[0])+"', color2 = '"+str(colors[1])+"', color3 = '" + \
+        str(colors[2])+"', color4 = '"+str(colors[3]) + \
+        "', color5 = '"+str(colors[4])+"' where id = '"+str(id)+"'"
+    conn.execute(sql)
 
 
 def reset_product(conn):
