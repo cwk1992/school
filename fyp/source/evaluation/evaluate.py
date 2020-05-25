@@ -10,6 +10,7 @@ from os.path import isfile, join
 import sqlite3
 from sqlite3 import Error
 import json
+import random
 
 # load and prepare the image
 
@@ -29,46 +30,78 @@ def load_image(filename):
 # load an image and predict the class
 
 
-def cnn():
+def cnn(threshold=0.6):
 
     # classes
     classes = ['T-shirt/top', 'Trouser', 'Pullover', 'Dress',
                'Coat', 'Sandal', 'Shirt', 'Sneaker', 'Bag', 'Ankle boot']
 
-    images = [f for f in listdir('images') if isfile(join('images', f))]
-    ids = list(map(lambda x: x[:-4], images))
+    images = [f for f in listdir('../images') if isfile(join('../images', f))]
+    # ids = list(map(lambda x: x[:-4], images))
+    ids = [3693]
 
-    conn = create_connection('database/fashion.db')
+    conn = create_connection('../database/fashion.db')
     products = select_product(conn, ids)
 
     # load model
-    model = load_model('ResNet56v2.h5')
+    model = load_model('../image_recognition/saved_model/ResNet56v2.h5')
 
-    res = []
-    total = 0
-    success = 0
+    res = {'T-shirt/top': [], 'Trouser': [], 'Pullover': [], 'Dress': [],
+           'Coat': [], 'Sandal': [], 'Shirt': [], 'Sneaker': [], 'Bag': [], 'Ankle boot': []}
+    calres = {'T-shirt/top': [0, 0], 'Trouser': [0, 0], 'Pullover': [0, 0], 'Dress': [0, 0],
+              'Coat': [0, 0], 'Sandal': [0, 0], 'Shirt': [0, 0], 'Sneaker': [0, 0], 'Bag': [0, 0], 'Ankle boot': [0, 0]}
 
     for product in products:
         # load the image if exist
-        total += 1
-        path = 'images/' + str(product[0]) + '.jpg'
-        if os.path.isfile(path) and os.stat(path).st_size > 0:
-            img = load_image(path)
-            # predict the class
-            result = model.predict(img)
-            result = np.argmax(result, axis=1)
-            for key in result:
-                res.append({'id': product[0], 'actual': product[3], 'predict': classes[key],
-                            'result': check_class(product[3], classes[key])})
-                success += check_class(product[3], classes[key])
-            print(total, success)
+        actual_class = ran_class(product[3])
+        path = '../images/' + str(product[0]) + '_1.jpg'
+        # if os.path.isfile(path) and os.stat(path).st_size > 0:
+        img = load_image(path)
+        # predict the class
+        proba = model.predict(img)
+        result = np.argmax(proba, axis=1)
+        p = proba[0][result][0]
+        # if p > threshold:
+        calres[actual_class][0] += 1
+        for key in result:
+            res[actual_class].append({'id': product[0], 'actual': actual_class, 'proba': str(p), 'predict': classes[key],
+                                      'result': check_class(product[3], classes[key])})
+            res[actual_class].append(proba.tolist())
+
+            calres[actual_class
+                   ][1] += check_class(product[3], classes[key])
+
+        actual_class = ran_class(product[3])
+        path = '../images/' + str(product[0]) + '_2.jpg'
+        # if os.path.isfile(path) and os.stat(path).st_size > 0:
+        img = load_image(path)
+        # predict the class
+        proba = model.predict(img)
+        result = np.argmax(proba, axis=1)
+        p = proba[0][result][0]
+        # if p > threshold:
+        calres[actual_class][0] += 1
+        for key in result:
+            res[actual_class].append({'id': product[0], 'actual': actual_class, 'proba': str(p), 'predict': classes[key],
+                                      'result': check_class(product[3], classes[key])})
+
+            res[actual_class].append(proba.tolist())
+            calres[actual_class
+                   ][1] += check_class(product[3], classes[key])
 
     with open('res.json', 'w') as f:
         json.dump(res, f)
 
+    with open('calres.json', 'w') as f:
+        json.dump(calres, f)
+
 
 def check_class(actual, predict):
     return int(predict in actual.split('|'))
+
+
+def ran_class(actual):
+    return random.choice(actual.split('|'))
 
 
 def evaluate():
